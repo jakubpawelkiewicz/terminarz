@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Biogazownia Łaźniki - Terminarz</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2e7d32">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+    
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; padding: 5px; margin: 0; }
+        .container { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 450px; min-height: 95vh; }
+        
+        /* Stylizacja Logo */
+        .logo-container { text-align: center; margin-bottom: 15px; padding-top: 10px; }
+        .logo-img { max-width: 350px; height: auto; display: none; margin: 0 auto; }
+
+        /* Logowanie */
+        .btn-login-group { display: flex; gap: 5px; margin-bottom: 15px; }
+        .btn-admin-login { flex: 1; background: #fff; border: 1px solid #2e7d32; padding: 8px; cursor: pointer; color: #2e7d32; font-size: 11px; border-radius: 5px; font-weight: bold; }
+        
+        /* Zalecenia Ogólne */
+        #globalAnnouncement { background: #fff9c4; border: 2px solid #fbc02d; padding: 12px; border-radius: 10px; margin-bottom: 15px; display: none; }
+        .announcement-text { font-size: 15px; color: #5d4037; font-weight: 500; white-space: pre-wrap; }
+        .announcement-title { font-size: 12px; font-weight: bold; color: #f57f17; display: block; margin-bottom: 5px; }
+        .admin-only-info { font-size: 11px; color: #d84315; font-weight: bold; margin-top: 8px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 5px; display: none; }
+
+        /* Panele Sterowania i Dodawania Zadań */
+        #adminPanel, #bossPanel { display: none; flex-direction: column; gap: 8px; margin-bottom: 15px; padding: 12px; border-radius: 10px; border: 2px solid; }
+        #adminPanel { background: #fff3e0; border-color: #ffb74d; }
+        #bossPanel { background: #e3f2fd; border-color: #2196f3; }
+
+        .stats-bar { display: flex; justify-content: space-around; background: #e8f5e9; padding: 10px; border-radius: 10px; margin-bottom: 15px; font-weight: bold; color: #2e7d32; }
+        .label { font-size: 11px; font-weight: bold; color: #5f6368; text-transform: uppercase; display: block; margin-bottom: 5px; }
+        
+        .worker-selection-box { background: white; border: 1px solid #ccc; border-radius: 8px; padding: 10px; max-height: 120px; overflow-y: auto; }
+        .worker-option { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; cursor: pointer; }
+
+        select, input[type="date"], input[type="text"], textarea, .btn-add, .btn-report { padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; }
+        textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+        .btn-add { background: #4caf50; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-report { background: #0288d1; color: white; border: none; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        
+        /* Lista zadań */
+        ul { list-style: none; padding: 0; }
+        li { background: #fff; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 10px; position: relative; border-left: 6px solid #ddd; cursor: pointer; transition: transform 0.1s; }
+        li:active { transform: scale(0.98); }
+        li.priority-wysoki { border-left-color: #d32f2f; }
+        li.priority-średni { border-left-color: #ffa000; }
+        li.priority-niski { border-left-color: #4caf50; }
+        li.completed { opacity: 0.5; background: #f1f3f4; border-left-color: #9e9e9e; }
+        li.completed .task-text { text-decoration: line-through; }
+        li.priority-info { border-left-color: #0288d1 !important; background-color: #e1f5fe !important; }
+        li.priority-info .worker-tag { background: #b3e5fc; color: #01579b; }
+        li.priority-info .task-date-info { display: none; }
+        
+        /* Wyróżnienie sugestii szefa */
+        li.is-suggestion { background-color: #f0f7ff; border-right: 4px solid #2196f3; }
+        
+        .delete-btn { position: absolute; top: 10px; right: 10px; background: #d32f2f; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; display: none; cursor: pointer; z-index: 10; line-height: 30px; text-align: center; }
+        .worker-tag { font-size: 13px; font-weight: bold; color: #0288d1; }
+        .task-text { font-size: 17px; display: block; margin: 5px 0; font-weight: 500; }
+        .task-comment { font-size: 13px; background: #fff9c4; padding: 5px 8px; border-radius: 5px; margin-top: 5px; color: #5d4037; border-left: 3px solid #fbc02d; font-style: italic; }
+        .task-image { margin-top: 10px; width: 100%; max-height: 250px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
+
+        /* Znacznik premii */
+        .bonus-tag { background: #ffd700; color: #000; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; margin-left: 5px; border: 1px solid #b8860b; display: inline-block; vertical-align: middle; }
+
+        /* Alerta dat */
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        .urgent-icon { color: #ff9800; animation: blink 1.5s infinite; font-weight: bold; font-size: 12px; display: block; margin-bottom: 4px; }
+        .overdue-icon { color: #d32f2f; animation: blink 1s infinite; font-weight: bold; font-size: 12px; display: block; margin-bottom: 4px; }
+
+        /* Archiwum */
+        #archiveSection { margin-top: 30px; border-top: 3px double #ccc; padding-top: 15px; width: 100%; }
+        .archive-title { text-align: center; color: #666; font-size: 14px; font-weight: bold; margin-bottom: 15px; text-transform: uppercase; }
+        .btn-archive-all, .btn-archive-download { color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; margin-bottom: 10px; display: none; }
+        .btn-archive-all { background: #607d8b; }
+        .btn-archive-download { background: #455a64; }
+        .btn-clear { width: 100%; padding: 12px; background: #c62828; color: white; border: none; border-radius: 8px; display: none; margin-top: 10px; cursor: pointer; }
+        
+        /* Sekcja zgłoszeń */
+        .report-box { background: #e8eaf6; border: 1px solid #c5cae9; padding: 12px; border-radius: 10px; margin-bottom: 15px; }
+        .report-item { background: #fff; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #3f51b5; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+
+        #imageUploadModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
+        .modal-content { background: white; padding: 20px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; }
+        
+        .hidden { display: none !important; }
+
+        #globalNoteInputAdmin, #globalNoteInputBoss { 
+            min-height: 250px !important; 
+            font-size: 16px !important;   
+            padding: 12px;
+            border: 2px solid #fbc02d;    
+            background-color: #fffde7;    
+            width: 100%;                  
+            box-sizing: border-box;
+        }
+
+        .confirm-box { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ccc; width: 100%; }
+        .workers-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+        .btn-confirm-worker { background-color: #e0e0e0; color: #333; border: 1px solid #ccc; padding: 4px 10px; border-radius: 15px; font-size: 12px; cursor: pointer; }
+        .badge-confirmed { background-color: #4caf50; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid #388e3c; display: inline-block; }
+    </style>
+</head>
+<body>
+
+<div id="imageUploadModal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Status zadania</h3>
+        <textarea id="modalComment" placeholder="Dodaj komentarz (np. stan licznika)..."></textarea>
+        <p class="label" style="margin-top:15px;">Dodaj zdjęcie (opcjonalnie):</p>
+        <input type="file" id="fileInput" accept="image/*">
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-add" style="background:#666; margin:0; flex:1;" onclick="closeModal()">ANULUJ</button>
+            <button id="saveBtn" class="btn-add" style="margin:0; flex:1;" onclick="saveTaskCompletion()">ZAPISZ</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="logo-container">
+        <img id="logoImg" src="" alt="Logo Biogazownia" class="logo-img">
+    </div>
+
+    <div class="btn-login-group" id="loginButtons">
+        <button class="btn-admin-login" onclick="login('boss')">🔐 LOGOWANIE SZEF</button>
+        <button class="btn-admin-login" onclick="login('admin')">🔐 LOGOWANIE KIEROWNIK</button>
+        <button id="logoutBtn" class="btn-admin-login hidden" style="background:#666; color:white; border:none;" onclick="location.reload()">WYLOGUJ</button>
+    </div>
+
+    <div id="globalAnnouncement">
+        <span class="announcement-title">📌 ZALECENIA OGÓLNE:</span>
+        <div id="announcementContent" class="announcement-text"></div>
+        <div id="adminEditInfo" class="admin-only-info"></div>
+    </div>
+
+    <div id="managerReportsPanel" class="hidden" style="margin-bottom:20px; border:2px dashed #3f51b5; padding: 12px; border-radius: 10px; background: #f5f6fa;">
+        <span class="label" style="color:#3f51b5; font-size:12px; font-weight: bold;">📥 ZGŁOSZONE ZADANIA OD PRACOWNIKÓW:</span>
+        <div id="managerReportsList" style="margin-top:10px; margin-bottom: 10px;"><i>Brak nowych zgłoszeń</i></div>
+        <button class="btn-clear" id="clearReportsBtn" style="display:block; background:#5c6bc0; margin-top:5px;" onclick="clearSelfReports()">WYCZYŚĆ LISTĘ ZGŁOSZEŃ</button>
+    </div>
+
+    <div class="report-box" id="workerReportBox">
+        <span class="label" style="color:#3f51b5;">Zgłoś wykonaną pracę:</span>
+        <select id="selfReportWorkerSelect" style="margin-bottom:6px; padding:8px; font-size:14px;"></select>
+        <textarea id="selfReportTextInput" placeholder="Opis zadania..." style="font-size:14px; min-height:50px;"></textarea>
+        <button class="btn-add" style="background:#3f51b5; margin-top:5px; padding:8px; font-size:14px;" onclick="sendSelfReport()">WYŚLIJ ZGŁOSZENIE</button>
+    </div>
+    
+    <div class="stats-bar">
+        <span>📝 Do zrobienia: <span id="countPending">0</span></span>
+        <span>✅ Gotowe: <span id="countDone">0</span></span>
+    </div>
+
+    <div id="adminPanel">
+        <span class="label">EDYCJA ZALECEŃ OGÓLNYCH</span>
+        <textarea id="globalNoteInputAdmin" placeholder="Wpisz ważne zalecenie..."></textarea>
+        <button class="btn-add" style="background:#fbc02d; color:#5d4037; margin-bottom:30px;" onclick="updateGlobalNote('Kierownik')">AKTUALIZUJ ZALECENIA</button>
+
+        <span class="label">NOWE ZADANIE DLA PRACOWNIKÓW</span>
+        <div id="workerCheckboxes" class="worker-selection-box"></div> 
+        <select id="prioritySelect" style="margin-top:5px;">
+            <option value="niski">Niski</option>
+            <option value="średni" selected>Średni</option>
+            <option value="wysoki">Wysoki</option>
+            <option value="info">ℹ️ INFORMACJA (Błękitny)</option>
+        </select>
+        <input type="date" id="dateInput" style="margin-top:5px;">
+        <input type="text" id="taskInput" placeholder="Treść zadania..." style="margin-top:5px;">
+        
+        <div style="display: flex; flex-direction: column; gap: 5px; margin: 5px 0;">
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 13px; color: #d84315;">
+                <input type="checkbox" id="requireConfirmCheck" style="width: 18px; height: 18px;"> ⚠️ Wymagaj odznaczenia przeczytania
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 13px; color: #b8860b;">
+                <input type="checkbox" id="isBonusCheck" style="width: 18px; height: 18px;"> 💰 Zadanie premiowane (Ukryte przed pracownikami)
+            </label>
+        </div>
+
+        <button class="btn-add" onclick="addTask()">DODAJ ZADANIE</button>
+    </div>
+
+    <div id="bossPanel">
+        <span class="label">ZALECENIA OGÓLNE (DLA WSZYSTKICH)</span>
+        <textarea id="globalNoteInputBoss" placeholder="Wpisz ważne zalecenie..."></textarea>
+        <button class="btn-add" style="background:#fbc02d; color:#5d4037; margin-bottom:15px;" onclick="updateGlobalNote('Szef')">AKTUALIZUJ ZALECENIA</button>
+
+        <span class="label">NOWA SUGESTIA DLA KIEROWNIKA</span>
+        <select id="bossPrioritySelect" style="margin-bottom:5px;">
+            <option value="niski">Niski</option>
+            <option value="średni" selected>Średni</option>
+            <option value="wysoki">Wysoki</option>
+            <option value="info">ℹ️ INFORMACJA (Błękitny)</option>
+        </select>
+        <input type="text" id="bossTaskInput" placeholder="Co trzeba zrobić?">
+        
+        <div style="display: flex; flex-direction: column; gap: 5px; margin: 5px 0;">
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 13px; color: #d84315;">
+                <input type="checkbox" id="requireConfirmCheckBoss" style="width: 18px; height: 18px;"> ⚠️ Wymagaj odznaczenia przeczytania
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 13px; color: #b8860b;">
+                <input type="checkbox" id="isBonusCheckBoss" style="width: 18px; height: 18px;"> 💰 Zadanie premiowane (Ukryte przed pracownikami)
+            </label>
+        </div>
+
+        <button class="btn-add" style="background:#2196f3;" onclick="addBossSuggestion()">WYŚLIJ SUGESTIĘ</button>
+    </div>
+
+    <div class="filter-group" style="margin-bottom:15px;">
+        <span class="label">FILTRUJ PRACOWNIKA:</span>
+        <select id="filterSelect" onchange="filterTasks()"></select> 
+    </div>
+
+    <ul id="taskList"></ul>
+
+    <div id="archiveSection">
+        <div class="archive-title">--- Archiwum zadań ---</div>
+        
+        <div id="archiveFilterContainer" class="hidden" style="margin-bottom: 10px;">
+            <span class="label">FILTRUJ ARCHIWUM:</span>
+            <select id="archiveFilterSelect" onchange="filterArchive()">
+                <option value="all">Wszystkie zadania archiwalne</option>
+                <option value="bonus">💰 Tylko zadania premiowane</option>
+            </select>
+        </div>
+
+        <button id="archiveBtn" class="btn-archive-all" onclick="archiveCompleted()">PRZENIEŚ GOTOWE DO ARCHIWUM</button>
+        <button id="downloadArchiveBtn" class="btn-archive-download" onclick="downloadFullArchive()">📥 POBIERZ PEŁNE ARCHIWUM (.TXT)</button>
+        <ul id="archiveList"></ul>
+    </div>
+    
+    <button class="btn-report" onclick="downloadReport()">📊 POBIERZ RAPORT BIEŻĄCY</button>
+
+    <button id="clearBtn" class="btn-clear" onclick="clearAll()">WYCZYŚĆ WSZYSTKO (BIEŻĄCE + ARCHIWUM)</button>
+</div>
+
+<script>
+    const LOGO_URL = "https://firebasestorage.googleapis.com/v0/b/terminarz-firmowy.firebasestorage.app/o/logo.png?alt=media&token=0fd5c5ee-a8ca-4299-9c83-a9a45d2dcc30"; 
+
+    if (LOGO_URL && LOGO_URL !== "") {
+        const logoImg = document.getElementById('logoImg');
+        logoImg.src = LOGO_URL;
+        logoImg.style.display = 'block';
+    }
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDhB1uzA3ruq1EcyBGguptT2qUlDB8tglg",
+        authDomain: "terminarz-firmowy.firebaseapp.com",
+        databaseURL: "https://terminarz-firmowy-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "terminarz-firmowy",
+        storageBucket: "terminarz-firmowy.appspot.com",
+        messagingSenderId: "259446596109",
+        appId: "1:259446596109:web:d9f4638e0dbc2c9cc5ab44"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const storage = firebase.storage();
+    
+    let isAdmin = false;
+    let isBoss = false;
+    let currentTaskId = null;
+    let currentTaskStatus = null;
+    let globalWorkersList = []; 
+    
+    const PASS_ADMIN = "Almanac123!";
+    const PASS_BOSS = "Szef123!";
+
+    function handleTaskClick(id, status, isSug, oldComment) {
+        if (isSug && !isAdmin && !isBoss) return;
+        currentTaskId = id;
+        currentTaskStatus = !status;
+        document.getElementById('modalTitle').innerText = currentTaskStatus ? "Oznacz jako wykonane" : "Przywróć do listy";
+        document.getElementById('modalComment').value = oldComment || "";
+        document.getElementById('fileInput').value = "";
+        document.getElementById('imageUploadModal').style.display = 'flex';
+    }
+
+    function closeModal() { document.getElementById('imageUploadModal').style.display = 'none'; }
+
+    async function saveTaskCompletion() {
+        const comment = document.getElementById('modalComment').value;
+        const file = document.getElementById('fileInput').files[0];
+        const saveBtn = document.getElementById('saveBtn');
+        
+        saveBtn.disabled = true;
+        saveBtn.innerText = "Przesyłanie...";
+
+        let imageUrl = "";
+        if (file) {
+            try {
+                const storageRef = storage.ref(`task_images/${currentTaskId}_${Date.now()}`);
+                await storageRef.put(file);
+                imageUrl = await storageRef.getDownloadURL();
+            } catch(e) { alert("Błąd przesyłania zdjęcia."); }
+        }
+
+        const updateData = { completed: currentTaskStatus, comment: comment.trim() };
+        if (imageUrl) updateData.imageUrl = imageUrl;
+
+        db.ref('tasks/' + currentTaskId).update(updateData);
+        saveBtn.disabled = false;
+        saveBtn.innerText = "ZAPISZ";
+        closeModal();
+    }
+
+    function loadTasks() {
+        db.ref('tasks').on('value', (snapshot) => {
+            const tasks = snapshot.val();
+            const list = document.getElementById('taskList');
+            list.innerHTML = '';
+            if (!tasks) { updateStats(); return; }
+
+            const today = new Date(); today.setHours(0,0,0,0);
+            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const sorted = Object.keys(tasks).map(id => ({id, ...tasks[id]}))
+                .sort((a, b) => {
+                    if (a.priority === 'info' && b.priority !== 'info') return -1;
+                    if (a.priority !== 'info' && b.priority === 'info') return 1;
+                    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                    const dateA = (a.date && a.date !== "Do ustalenia" && a.date !== "Bieżące") ? new Date(a.date) : new Date("9999-12-31");
+                    const dateB = (b.date && b.date !== "Do ustalenia" && b.date !== "Bieżące") ? new Date(b.date) : new Date("9999-12-31");
+                    return dateA - dateB;
+                });
+
+            sorted.forEach(t => {
+                if (t.priority === 'info' && t.date && t.date !== "Do ustalenia" && t.date !== "Bieżące") {
+                    const infoDate = new Date(t.date);
+                    infoDate.setHours(23, 59, 59);
+                    const now = new Date();
+                    if (now > infoDate) return;
+                }
+
+                if (t.worker === "SZEF" && !isAdmin && !isBoss) return;
+                
+                let dateBadge = "";
+                if (!t.completed && t.date && t.date !== "Do ustalenia") {
+                    const taskDate = new Date(t.date); taskDate.setHours(0,0,0,0);
+                    if (taskDate < today) dateBadge = '<span class="overdue-icon">⚠️ PO TERMINIE!</span>';
+                    else if (taskDate <= tomorrow) dateBadge = '<span class="urgent-icon">🕒 PILNE!</span>';
+                }
+
+                const isSug = t.worker === "SZEF";
+                
+                let confirmationHtml = '';
+                if (t.requireConfirm) {
+                    confirmationHtml = `<div class="confirm-box"><div style="font-size:11px; font-weight:bold; color:#555;">Potwierdzenie zapoznania się:</div><div class="workers-badges">`;
+                    const confirmedList = t.confirmedBy ? Object.values(t.confirmedBy) : [];
+
+                    globalWorkersList.forEach(wName => {
+                        if (confirmedList.includes(wName)) {
+                            confirmationHtml += `<span class="badge-confirmed">✓ ${wName}</span>`;
+                        } else {
+                            confirmationHtml += `<button onclick="event.stopPropagation(); confirmRead('${t.id}', '${wName}')" class="btn-confirm-worker">${wName}</button>`;
+                        }
+                    });
+                    confirmationHtml += `</div></div>`;
+                }
+
+                const bonusBadge = (t.isBonus && (isAdmin || isBoss)) ? `<span class="bonus-tag">💰 PREMIA</span>` : '';
+
+                const li = document.createElement('li');
+                li.setAttribute('data-worker', t.worker);
+                li.className = `priority-${t.priority} ${t.completed ? 'completed' : ''} ${isSug ? 'is-suggestion' : ''}`;
+                
+                li.innerHTML = `
+                    <button class="delete-btn" style="display: ${isAdmin ? 'block' : 'none'}" onclick="event.stopPropagation(); deleteTask('${t.id}')">×</button>
+                    ${dateBadge}
+                    <span class="worker-tag">${isSug ? "💡 SUGESTIA SZEFA" : "👥 " + t.worker}</span> ${bonusBadge}
+                    <span class="task-text">${t.text}</span>
+                    ${t.comment ? `<div class="task-comment">💬 ${t.comment}</div>` : ""}
+                    ${t.imageUrl ? `<img src="${t.imageUrl}" class="task-image" onclick="event.stopPropagation(); window.open('${t.imageUrl}')">` : ""}
+                    <div style="font-size:12px; color:#666; margin-top:5px;">
+                        📅 Termin: ${t.date} | ⚡ Priorytet: <b style="color: ${t.priority === 'wysoki' ? '#d32f2f' : '#555'}">${t.priority.toUpperCase()}</b>
+                    </div>
+                    ${confirmationHtml}`;
+                
+                li.onclick = () => handleTaskClick(t.id, t.completed, isSug, t.comment);
+                list.appendChild(li);
+            });
+            updateStats();
+            filterTasks();
+        });
+    }
+
+    function confirmRead(taskId, workerName) {
+        if (confirm(`Czy potwierdzasz, że pracownik ${workerName} zapoznał się z informacją?`)) {
+            db.ref('tasks/' + taskId + '/confirmedBy').push(workerName)
+            .catch(err => alert("Błąd zapisu confirmation"));
+        }
+    }
+
+    db.ref('archive').on('value', (snapshot) => {
+        const data = snapshot.val();
+        window.archiveDataCache = data; 
+        filterArchive();
+    });
+
+    function filterArchive() {
+        const archList = document.getElementById('archiveList');
+        archList.innerHTML = '';
+        const data = window.archiveDataCache;
+        if (!data) return;
+
+        const filterVal = document.getElementById('archiveFilterSelect').value;
+
+        Object.keys(data).reverse().slice(0, 40).forEach(id => {
+            const t = data[id];
+            if (filterVal === 'bonus' && !t.isBonus) return;
+
+            const bonusBadge = (t.isBonus && (isAdmin || isBoss)) ? `<span class="bonus-tag" style="vertical-align:initial;">💰 PREMIA</span>` : '';
+
+            const li = document.createElement('li');
+            li.style.opacity = "0.6"; li.style.borderLeft = "6px solid #9e9e9e";
+            li.innerHTML = `
+                <span class="worker-tag">📦 ${t.worker}</span> ${bonusBadge}
+                <span class="task-text" style="text-decoration:line-through">${t.text}</span>
+                ${t.imageUrl ? `<img src="${t.imageUrl}" class="task-image" style="max-height:100px; width:auto;">` : ""}
+                <div style="font-size:11px; color:#666;">Wykonano: ${t.date} | Komentarz: ${t.comment || "Brak"}</div>`;
+            archList.appendChild(li);
+        });
+    }
+
+    function sendSelfReport() {
+        const worker = document.getElementById('selfReportWorkerSelect').value;
+        const text = document.getElementById('selfReportTextInput').value;
+
+        if (!text.trim()) return alert("Wpisz treść wykonanej pracy!");
+
+        db.ref('self_reports').push({
+            worker: worker,
+            text: text.trim(),
+            timestamp: new Date().toLocaleString('pl-PL')
+        }).then(() => {
+            alert("Zgłoszenie wysłane pomyślnie.");
+            document.getElementById('selfReportTextInput').value = '';
+        }).catch(() => alert("Błąd wysyłania. Spróbuj ponownie."));
+    }
+
+    function listenToSelfReports() {
+        db.ref('self_reports').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const container = document.getElementById('managerReportsList');
+            if (!data) {
+                container.innerHTML = '<i>Brak nowych zgłoszeń</i>';
+                return;
+            }
+            container.innerHTML = '';
+            Object.values(data).reverse().forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'report-item';
+                div.innerHTML = `<b>${r.worker}</b> <span style="font-size:11px; color:#666;">(${r.timestamp})</span>:<br>${r.text}`;
+                container.appendChild(div);
+            });
+        });
+    }
+
+    function clearSelfReports() {
+        if (confirm("Czy na pewno chcesz wyczyścić listę zgłoszeń od chłopaków?")) {
+            db.ref('self_reports').remove();
+        }
+    }
+
+    function login(role) {
+        const pass = prompt("Hasło:");
+        if (role === 'admin' && pass === PASS_ADMIN) {
+            isAdmin = true; isBoss = false;
+            document.getElementById('adminPanel').style.display = 'flex';
+            document.getElementById('archiveBtn').style.display = 'block';
+            document.getElementById('downloadArchiveBtn').style.display = 'block';
+            document.getElementById('clearBtn').style.display = 'block';
+            document.getElementById('archiveFilterContainer').classList.remove('hidden'); 
+            document.getElementById('managerReportsPanel').classList.remove('hidden'); 
+            document.getElementById('workerReportBox').classList.add('hidden'); // Ukrywa panel wysyłania u kierownika
+            listenToSelfReports();
+        } else if (role === 'boss' && pass === PASS_BOSS) {
+            isBoss = true; isAdmin = false;
+            document.getElementById('bossPanel').style.display = 'flex';
+            document.getElementById('archiveFilterContainer').classList.remove('hidden'); 
+            document.getElementById('managerReportsPanel').classList.remove('hidden'); 
+            document.getElementById('workerReportBox').classList.add('hidden'); // Ukrywa panel wysyłania u szefa
+            listenToSelfReports();
+        } else if (pass !== null) return alert("Błąd!");
+        
+        document.querySelectorAll('.btn-admin-login:not(#logoutBtn)').forEach(b => b.classList.add('hidden'));
+        document.getElementById('logoutBtn').classList.remove('hidden');
+        document.getElementById('adminEditInfo').style.display = "block";
+        loadTasks(); 
+    }
+
+    function updateGlobalNote(who) {
+        const noteId = (who === 'Szef') ? 'globalNoteInputBoss' : 'globalNoteInputAdmin';
+        const text = document.getElementById(noteId).value;
+        if (text.trim() === "") { if (!confirm("Czy na pewno chcesz całkowicie usunąć zalecenia?")) return; }
+
+        db.ref('global_note').set({ text: text, author: who, timestamp: new Date().toLocaleString('pl-PL') });
+        alert("Zaktualizowano zalecenia!");
+    }
+
+    db.ref('global_note').on('value', (snap) => {
+        const data = snap.val();
+        if (data && data.text) {
+            document.getElementById('globalAnnouncement').style.display = 'block';
+            document.getElementById('announcementContent').innerText = data.text;
+            document.getElementById('adminEditInfo').innerText = "Edytował: " + data.author + " (" + data.timestamp + ")";
+            const adminInput = document.getElementById('globalNoteInputAdmin');
+            const bossInput = document.getElementById('globalNoteInputBoss');
+            if (adminInput) adminInput.value = data.text;
+            if (bossInput) bossInput.value = data.text;
+        }
+    });
+
+    function archiveCompleted() {
+        db.ref('tasks').once('value', s => {
+            const d = s.val(); if(!d) return;
+            Object.keys(d).forEach(id => { if(d[id].completed) { db.ref('archive').push(d[id]); db.ref('tasks/'+id).remove(); } });
+        });
+    }
+
+    function downloadFullArchive() {
+        db.ref('archive').once('value', s => {
+            const d = s.val(); if(!d) return alert("Archiwum jest puste!");
+            let out = "ARCHIWUM BIOGAZOWNIA ŁAŹNIKI\n\n";
+            Object.values(d).forEach(t => out += `DATA: ${t.date} | PREMIA: ${t.isBonus ? 'TAK':'NIE'} | PRACOWNIK: ${t.worker} | ZADANIE: ${t.text} | KOMENTARZ: ${t.comment || "Brak"}\n`);
+            const blob = new Blob([out], {type: 'text/plain'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Archiwum_Full.txt'; a.click();
+        });
+    }
+
+    function addTask() {
+        const text = document.getElementById('taskInput').value;
+        const date = document.getElementById('dateInput').value || "Bieżące";
+        const priority = document.getElementById('prioritySelect').value;
+        const requireConfirm = document.getElementById('requireConfirmCheck').checked;
+        const isBonus = document.getElementById('isBonusCheck').checked; 
+        let selected = Array.from(document.querySelectorAll('input[name="workerSelect"]:checked')).map(cb => cb.value);
+        
+        if (selected.length === 0) {
+            if (priority === 'info') { selected = ["DLA WSZYSTKICH"]; } 
+            else { return alert("Wybierz pracownika lub zmień typ na INFORMACJA!"); }
+        }
+        if (!text) return alert("Wpisz treść!");
+
+        db.ref('tasks').push({ text: text, worker: selected.join(", "), priority: priority, date: date, completed: false, requireConfirm: requireConfirm, isBonus: isBonus, timestamp: Date.now() });
+        document.getElementById('taskInput').value = '';
+        document.getElementById('requireConfirmCheck').checked = false;
+        document.getElementById('isBonusCheck').checked = false; 
+        document.querySelectorAll('input[name="workerSelect"]').forEach(cb => cb.checked = false);
+    }
+
+    function addBossSuggestion() {
+        const t = document.getElementById('bossTaskInput').value;
+        const p = document.getElementById('bossPrioritySelect').value;
+        const requireConfirm = document.getElementById('requireConfirmCheckBoss').checked;
+        const isBonus = document.getElementById('isBonusCheckBoss').checked; 
+        if (!t) return alert("Wpisz treść!");
+
+        const workerName = (p === 'info') ? "DLA WSZYSTKICH" : "SZEF";
+        db.ref('tasks').push({ text: t, worker: workerName, priority: p, date: "Do ustalenia", completed: false, requireConfirm: requireConfirm, isBonus: isBonus, timestamp: Date.now() });
+        document.getElementById('bossTaskInput').value = '';
+        document.getElementById('requireConfirmCheckBoss').checked = false;
+        document.getElementById('isBonusCheckBoss').checked = false; 
+        alert(p === 'info' ? "Wysłano ogłoszenie!" : "Sugestia wysłana!");
+    }
+
+    function filterTasks() {
+        const sel = document.getElementById('filterSelect').value;
+        document.querySelectorAll('#taskList li').forEach(li => {
+            const w = li.getAttribute('data-worker');
+            li.classList.toggle('hidden', sel !== "Wszyscy" && (sel === "SZEF" ? w !== "SZEF" : !w.split(", ").includes(sel)));
+        });
+        updateStats();
+    }
+
+    function updateStats() {
+        const all = document.querySelectorAll('#taskList li:not(.hidden)').length;
+        const done = document.querySelectorAll('#taskList li.completed:not(.hidden)').length;
+        document.getElementById('countPending').textContent = all - done;
+        document.getElementById('countDone').textContent = done;
+    }
+
+    function deleteTask(id) { if(confirm("Usunąć bezpowrotnie?")) db.ref('tasks/' + id).remove(); }
+    function clearAll() { if(confirm("UWAGA! To usunie wszystkie zadania i archiwum. Kontynuować?")) { db.ref('tasks').remove(); db.ref('archive').remove(); db.ref('self_reports').remove(); } }
+
+    function downloadReport() {
+        let out = "RAPORT BIEŻĄCY BIOGAZOWNIA\n\n";
+        document.querySelectorAll('#taskList li:not(.hidden)').forEach(li => out += li.innerText.replace('×', '').trim() + "\n---\n");
+        const blob = new Blob([out], {type: 'text/plain'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Raport_Biezacy.txt'; a.click();
+    }
+
+    db.ref('workers').on('value', s => {
+        let h = '<option value="Wszyscy">Wszyscy pracownicy</option>';
+        let c = '';
+        let selfReportOptions = '';
+        h += '<option value="SZEF">💡 SUGESTIE SZEFA</option>';
+        globalWorkersList = []; 
+        
+        s.forEach(w => {
+            const name = w.val().name;
+            globalWorkersList.push(name); 
+            h += `<option value="${name}">${name}</option>`;
+            c += `<label class="worker-option"><input type="checkbox" name="workerSelect" value="${name}"><span>${name}</span></label>`;
+            selfReportOptions += `<option value="${name}">${name}</option>`;
+        });
+        
+        document.getElementById('filterSelect').innerHTML = h;
+        document.getElementById('workerCheckboxes').innerHTML = c;
+        document.getElementById('selfReportWorkerSelect').innerHTML = selfReportOptions;
+    });
+
+    loadTasks();
+
+    if ("Notification" in window) { Notification.requestPermission(); }
+    let sessionStartTime = Date.now();
+
+    db.ref('tasks').on('child_added', (snapshot) => {
+        const task = snapshot.val();
+        if (task.timestamp && task.timestamp > sessionStartTime) {
+            let shouldNotify = false;
+            let title = "Biogazownia Łaźniki";
+            if (task.priority === 'info') { title = "ℹ️ NOWE OGŁOSZENIE"; shouldNotify = true; } 
+            else if (task.worker === "SZEF" && isAdmin) { title = "💡 SUGESTIA OD SZEFA"; shouldNotify = true; }
+
+            if (shouldNotify && Notification.permission === "granted") {
+                new Notification(title, { body: task.text, icon: 'https://firebasestorage.googleapis.com/v0/b/terminarz-firmowy.firebasestorage.app/o/logo.png?alt=media&token=0fd5c5ee-a8ca-4299-9c83-a9a45d2dcc30' });
+                try { new Audio('https://www.soundjay.com/buttons/beep-07a.mp3').play(); } catch(e) {}
+            }
+        }
+    });
+</script>
+</body>
+</html>
